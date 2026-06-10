@@ -33,7 +33,8 @@ const productosItem = {
     "SUPER BLUE * 50 KG": 9,
     "NPK 20-20-20 * 50 KG": 10,
     "PAPA SIERRA * 50 KG": 11,
-    "ADITIVO AMARILLO * 20KG": 12
+    "ADITIVO AMARILLO * 20KG": 12,
+    "ADITIVO AZUL": 13
 };
 
 // Variables globales
