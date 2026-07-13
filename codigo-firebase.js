@@ -172,181 +172,6 @@ function fechaParaInputDate(fechaStr) {
     }
 }
 
-// ==================== FUNCIÓN PARA RECALCULAR STOCK ====================
-
-async function recalcularStock(itemProducto, nuevosMovimientos) {
-    if (!confirm("⚠️ ¿Estás seguro de recalcular el stock?\n\nEsto actualizará todos los stocks según el orden actual de las filas. ¿Deseas continuar?")) {
-        return false;
-    }
-    
-    // IMPORTANTE: Mantener el orden que el usuario estableció (NO reordenar por fecha)
-    // Recalcular stocks en el orden actual (el que el usuario arrastró)
-    let stockAcumulado = 0;
-    const movimientosRecalculados = nuevosMovimientos.map((mov, idx) => {
-        stockAcumulado = stockAcumulado + mov.ingreso - mov.salida;
-        // Actualizar el stock y guardar el ordenManual
-        const movActualizado = { 
-            ...mov, 
-            stock: stockAcumulado,
-            ordenManual: idx,  // Guardar el orden manual
-            fechaOriginal: mov.fecha  // Preservar fecha original
-        };
-        console.log(`${idx + 1}. ${mov.fecha} - ${mov.operacion} | Ingreso: ${mov.ingreso} | Salida: ${mov.salida} | Stock: ${stockAcumulado}`);
-        return movActualizado;
-    });
-    
-    // Guardar en Firebase (manteniendo el orden manual)
-    try {
-        await database.ref("inventario/" + itemProducto).set(movimientosRecalculados);
-        alert("✅ Stock recalculado correctamente!");
-        
-        // Recargar la tabla manteniendo el orden manual
-        await mostrarTablaConOrdenManual(itemProducto, movimientosRecalculados);
-        cargarResumenStock();
-        return true;
-    } catch (error) {
-        alert("❌ Error al guardar: " + error.message);
-        return false;
-    }
-}
-
-// Nueva función para mostrar tabla respetando el orden manual
-async function mostrarTablaConOrdenManual(itemProducto, movimientosGuardados) {
-    const descripcion = Object.keys(productosItem).find(key => productosItem[key] === itemProducto);
-    const contenedor = document.getElementById("contenedorTablas");
-    const btnRecalcular = document.getElementById("btnRecalcular");
-    
-    if (btnRecalcular) {
-        btnRecalcular.style.display = 'none';
-    }
-    
-    if (!contenedor) return;
-    
-    contenedor.innerHTML = "";
-    
-    // Usar los movimientos ya guardados (con el orden manual)
-    let movimientos = [...movimientosGuardados];
-    
-    // Ordenar por ordenManual si existe, si no, por fecha descendente
-    if (movimientos[0] && movimientos[0].ordenManual !== undefined) {
-        // Ordenar por ordenManual (el orden que el usuario estableció)
-        movimientos.sort((a, b) => (a.ordenManual || 0) - (b.ordenManual || 0));
-    } else {
-        // Si no hay ordenManual, ordenar por fecha descendente
-        movimientos.sort((a, b) => {
-            const fechaA = new Date(a.fecha);
-            const fechaB = new Date(b.fecha);
-            if (fechaA.getTime() !== fechaB.getTime()) {
-                return fechaB - fechaA;
-            }
-            const tsA = a.timestamp || 0;
-            const tsB = b.timestamp || 0;
-            return tsA - tsB;
-        });
-    }
-    
-    const titulo = document.createElement("h3");
-    titulo.textContent = `${descripcion} (Orden manual - arrastra las filas)`;
-    contenedor.appendChild(titulo);
-    
-    if (modoActual === 'admin' && usuarioAutenticado) {
-        const instruccion = document.createElement("p");
-        instruccion.innerHTML = "💡 <strong>Modo administrador:</strong> Arrastra las filas usando las ⋮⋮ para reordenar, luego haz clic en 'Recalcular Stock'";
-        instruccion.style.backgroundColor = "#e7f3ff";
-        instruccion.style.padding = "8px";
-        instruccion.style.borderRadius = "5px";
-        instruccion.style.fontSize = "14px";
-        contenedor.appendChild(instruccion);
-    }
-    
-    const tabla = document.createElement("table");
-    tabla.border = "1";
-    tabla.style.width = "100%";
-    tabla.style.borderCollapse = "collapse";
-    
-    let cabecera = `
-        <thead>
-            <tr>
-                <th style="width: 40px;">⋮⋮</th>
-                <th>Item</th>
-                <th>Fecha</th>
-                <th>Operación</th>
-                <th>Ingreso</th>
-                <th>Salida</th>
-                <th>Stock</th>
-                <th>Observaciones</th>`;
-    
-    if (modoActual === 'admin' && usuarioAutenticado) {
-        cabecera += `<th>Acción</th>`;
-    }
-    
-    cabecera += `</tr></thead><tbody></tbody>`;
-    tabla.innerHTML = cabecera;
-    
-    const tbody = tabla.querySelector("tbody");
-    
-    movimientos.forEach((item, index) => {
-        const esPrimero = (index === 0);
-        const claseDestacada = esPrimero ? 'ultimo-stock' : '';
-        
-        let fila = `
-            <td style="cursor: grab; text-align: center; ${claseDestacada ? 'background-color: #e8f5e9;' : ''}">⋮⋮</td>
-            <td class="numero-formateado ${claseDestacada}">${item.item}</td>
-            <td ${claseDestacada ? 'class="ultimo-stock"' : ''}>${formatearFecha(item.fecha)}</td>
-            <td ${claseDestacada ? 'class="ultimo-stock"' : ''}>${item.operacion}</td>
-            <td class="numero-formateado ${claseDestacada}">${formatearNumero(item.ingreso)}</td>
-            <td class="numero-formateado ${claseDestacada}">${formatearNumero(item.salida)}</td>
-            <td class="numero-formateado ${claseDestacada}"><strong>${formatearNumero(item.stock)}</strong></td>
-            <td ${claseDestacada ? 'class="ultimo-stock"' : ''}>${item.observaciones || '-'}</td>`;
-        
-        if (modoActual === 'admin' && usuarioAutenticado) {
-            fila += `
-            <td ${claseDestacada ? 'class="ultimo-stock"' : ''}>
-                <button class="btn-editar" data-item="${itemProducto}" data-index="${index}">
-                    Editar
-                </button>
-                <button class="btn-eliminar" data-item="${itemProducto}" data-index="${index}">
-                    Eliminar
-                </button>
-            </td>`;
-        }
-        
-        const tr = document.createElement("tr");
-        if (claseDestacada) tr.className = claseDestacada;
-        tr.setAttribute('data-original-item', JSON.stringify(item));
-        tr.innerHTML = fila;
-        tbody.appendChild(tr);
-    });
-    
-    contenedor.appendChild(tabla);
-    
-    if (modoActual === 'admin' && usuarioAutenticado) {
-        activarDragAndDrop();
-        if (btnRecalcular) {
-            btnRecalcular.style.display = 'inline-block';
-        }
-    }
-    
-    // Eventos de botones
-    if (modoActual === 'admin' && usuarioAutenticado) {
-        document.querySelectorAll(".btn-editar").forEach(btn => {
-            btn.addEventListener("click", function() {
-                const itemProd = this.getAttribute("data-item");
-                const idx = this.getAttribute("data-index");
-                mostrarModalEditar(parseInt(itemProd), parseInt(idx));
-            });
-        });
-        
-        document.querySelectorAll(".btn-eliminar").forEach(btn => {
-            btn.addEventListener("click", function() {
-                const itemProd = this.getAttribute("data-item");
-                const idx = this.getAttribute("data-index");
-                eliminarRegistro(parseInt(itemProd), parseInt(idx));
-            });
-        });
-    }
-}
-
 // ==================== ACTIVAR DRAG & DROP ====================
 
 function activarDragAndDrop() {
@@ -372,7 +197,7 @@ function activarDragAndDrop() {
     });
 }
 
-// ==================== FUNCIÓN MOSTRAR TABLA (UNIFICADA) ====================
+// ==================== FUNCIÓN MOSTRAR TABLA (CORREGIDA) ====================
 
 function mostrarTabla() {
     console.log("Función mostrarTabla() ejecutada - Modo:", modoActual);
@@ -418,33 +243,36 @@ function mostrarTabla() {
         
         movimientosActuales = [...movimientos];
         
-        // ========== ORDENAR: PRIORIDAD AL ORDEN MANUAL ==========
-        // Verificar si existe ordenManual en los registros
-        const tieneOrdenManual = movimientos.some(m => m.ordenManual !== undefined);
+        // ========== ORDENAR POR FECHA ASCENDENTE (SIEMPRE) ==========
+        // Ordenar por fecha (más antiguo a más reciente)
+        movimientos.sort((a, b) => {
+            const fechaA = new Date(a.fecha);
+            const fechaB = new Date(b.fecha);
+            return fechaA - fechaB;
+        });
+        
+        // ========== RECALCULAR TODOS LOS STOCKS ==========
+        let stockAcumulado = 0;
+        movimientos = movimientos.map((mov, idx) => {
+            stockAcumulado = stockAcumulado + mov.ingreso - mov.salida;
+            return { 
+                ...mov, 
+                stock: stockAcumulado,
+                ordenManual: idx  // Actualizar orden manual
+            };
+        });
+        
+        // Guardar en Firebase con el orden correcto (opcional, pero recomendado)
+        database.ref("inventario/" + itemProducto).set(movimientos);
+        
+        console.log("📊 Datos ordenados por fecha (antiguo → nuevo):");
+        movimientos.forEach((m, i) => {
+            console.log(`  ${i+1}. ${m.fecha} | ${m.operacion} | Stock: ${m.stock}`);
+        });
 
-        if (tieneOrdenManual) {
-            // Ordenar por ordenManual (el orden que el usuario estableció)
-            movimientos.sort((a, b) => (a.ordenManual || 0) - (b.ordenManual || 0));
-            console.log("📌 Usando orden manual para mostrar");
-        } else {
-            // Si no hay ordenManual, ordenar por fecha ascendente (antiguo primero)
-            movimientos.sort((a, b) => {
-                const fechaA = new Date(a.fecha);
-                const fechaB = new Date(b.fecha);
-                if (fechaA.getTime() !== fechaB.getTime()) {
-                    return fechaA - fechaB;  // ← ASCENDENTE (antiguo primero)
-                }
-                const tsA = a.timestamp || 0;
-                const tsB = b.timestamp || 0;
-                return tsA - tsB;
-            });
-            console.log("📅 Usando orden por fecha ascendente para mostrar");
-        }
-
+        // ========== CREAR TABLA ==========
         const titulo = document.createElement("h3");
-        titulo.textContent = tieneOrdenManual ? 
-            `${descripcion} (Orden manual - arrastra las filas)` : 
-            `${descripcion} (Historial - más reciente primero)`;
+        titulo.textContent = `${descripcion} (Historial ordenado por fecha - antiguo primero)`;
         contenedor.appendChild(titulo);
         
         // Instrucción para modo admin
@@ -479,12 +307,13 @@ function mostrarTabla() {
             cabecera += `<th>Acción</th>`;
         }
         
-        cabecera += `<tr></thead><tbody></tbody>`;
+        cabecera += `</tr></thead><tbody></tbody>`;
         tabla.innerHTML = cabecera;
 
         const tbody = tabla.querySelector("tbody");
 
         movimientos.forEach((item, index) => {
+            // Resaltar la ÚLTIMA fila (más reciente = stock actual)
             const esUltimo = (index === movimientos.length - 1);
             const claseDestacada = esUltimo ? 'ultimo-stock' : '';
             
@@ -546,6 +375,37 @@ function mostrarTabla() {
             });
         }
     });
+}
+
+// ==================== FUNCIÓN PARA RECALCULAR STOCK (MANTENIENDO ORDEN MANUAL) ====================
+
+async function recalcularStock(itemProducto, nuevosMovimientos) {
+    if (!confirm("⚠️ ¿Estás seguro de recalcular el stock?\n\nEsto actualizará todos los stocks según el orden actual de las filas. ¿Deseas continuar?")) {
+        return false;
+    }
+    
+    let stockAcumulado = 0;
+    const movimientosRecalculados = nuevosMovimientos.map((mov, idx) => {
+        stockAcumulado = stockAcumulado + mov.ingreso - mov.salida;
+        const movActualizado = { 
+            ...mov, 
+            stock: stockAcumulado,
+            ordenManual: idx
+        };
+        console.log(`${idx + 1}. ${mov.fecha} - ${mov.operacion} | Stock: ${stockAcumulado}`);
+        return movActualizado;
+    });
+    
+    try {
+        await database.ref("inventario/" + itemProducto).set(movimientosRecalculados);
+        alert("✅ Stock recalculado correctamente!");
+        mostrarTabla();
+        cargarResumenStock();
+        return true;
+    } catch (error) {
+        alert("❌ Error al guardar: " + error.message);
+        return false;
+    }
 }
 
 // ==================== ELIMINAR REGISTRO ====================
@@ -653,12 +513,9 @@ function guardarEdicion(e) {
             editadoEn: firebase.database.ServerValue.TIMESTAMP
         };
         
+        // Recalcular todos los stocks desde el inicio
         let stock = 0;
-        if (index > 0) {
-            stock = movimientos[index - 1].stock;
-        }
-        
-        for (let i = index; i < movimientos.length; i++) {
+        for (let i = 0; i < movimientos.length; i++) {
             stock = stock + movimientos[i].ingreso - movimientos[i].salida;
             movimientos[i].stock = stock;
         }
@@ -693,7 +550,12 @@ function cargarResumenStock() {
                 let stockActual = 0;
                 
                 if (movimientos && movimientos.length > 0) {
-                    stockActual = movimientos[movimientos.length - 1].stock;
+                    // Ordenar por fecha para obtener el stock correcto
+                    const movs = Array.isArray(movimientos) ? movimientos : Object.values(movimientos);
+                    movs.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+                    let stock = 0;
+                    movs.forEach(m => { stock = stock + m.ingreso - m.salida; });
+                    stockActual = stock;
                 }
                 
                 return {
@@ -777,11 +639,15 @@ async function exportarExcel() {
             const itemProducto = i + 1;
             
             const snapshot = await database.ref("inventario/" + itemProducto).once("value");
-            const movimientos = snapshot.val() || [];
+            let movimientos = snapshot.val() || [];
             
             let stockActual = 0;
             if (movimientos.length > 0) {
-                stockActual = movimientos[movimientos.length - 1].stock;
+                const movs = Array.isArray(movimientos) ? movimientos : Object.values(movimientos);
+                movs.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+                let stock = 0;
+                movs.forEach(m => { stock = stock + m.ingreso - m.salida; });
+                stockActual = stock;
             }
             
             totalStock += stockActual;
@@ -801,21 +667,20 @@ async function exportarExcel() {
             const itemProducto = i + 1;
             
             const snapshot = await database.ref("inventario/" + itemProducto).once("value");
-            const movimientos = snapshot.val() || [];
+            let movimientos = snapshot.val() || [];
             
             const datosProducto = [];
             datosProducto.push([`INVENTARIO: ${descripcion}`]);
             datosProducto.push([]);
             
             if (movimientos.length > 0) {
+                // Ordenar ascendente para el Excel
+                const movs = Array.isArray(movimientos) ? movimientos : Object.values(movimientos);
+                movs.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+                
                 datosProducto.push(["ITEM", "FECHA", "OPERACIÓN", "INGRESO", "SALIDA", "STOCK", "OBSERVACIONES", "USUARIO"]);
                 
-                // Ordenar ascendente para el Excel (histórico)
-                const movimientosOrdenados = [...movimientos].sort((a, b) => {
-                    return new Date(a.fecha) - new Date(b.fecha);
-                });
-                
-                movimientosOrdenados.forEach(mov => {
+                movs.forEach(mov => {
                     datosProducto.push([
                         mov.item,
                         formatearFecha(mov.fecha),
@@ -829,8 +694,10 @@ async function exportarExcel() {
                 });
                 
                 datosProducto.push([]);
-                const ultimoStock = movimientos[movimientos.length - 1].stock;
-                datosProducto.push(["STOCK FINAL:", "", "", "", "", ultimoStock, "", ""]);
+                // Recalcular stock final
+                let stock = 0;
+                movs.forEach(m => { stock = stock + m.ingreso - m.salida; });
+                datosProducto.push(["STOCK FINAL:", "", "", "", "", stock, "", ""]);
             } else {
                 datosProducto.push(["NO HAY REGISTROS PARA ESTE PRODUCTO"]);
             }
@@ -981,17 +848,18 @@ document.addEventListener("DOMContentLoaded", function() {
             
             movimientos.push(nuevoRegistro);
             
-            // Orden ascendente para cálculo correcto
+            // Orden ascendente por fecha
             movimientos.sort((a, b) => {
                 const fechaA = new Date(a.fecha);
                 const fechaB = new Date(b.fecha);
                 return fechaA - fechaB;
             });
             
+            // Recalcular todos los stocks
             let stockAcumulado = 0;
-            movimientos = movimientos.map(mov => {
+            movimientos = movimientos.map((mov, idx) => {
                 stockAcumulado = stockAcumulado + mov.ingreso - mov.salida;
-                return { ...mov, stock: stockAcumulado };
+                return { ...mov, stock: stockAcumulado, ordenManual: idx };
             });
             
             database.ref("inventario/" + itemProducto).set(movimientos, () => {
@@ -1018,7 +886,6 @@ document.addEventListener("DOMContentLoaded", function() {
             const filas = tbody.querySelectorAll("tr");
             const nuevoOrden = [];
             
-            // Obtener el orden actual de las filas (después de arrastrar)
             for (let i = 0; i < filas.length; i++) {
                 const fila = filas[i];
                 const datosOriginales = fila.getAttribute('data-original-item');
