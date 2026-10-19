@@ -20,23 +20,8 @@ try {
 const database = firebase.database();
 const auth = firebase.auth();
 
-// Mapeo de productos
-const productosItem = {
-    "UREA FERTI * 50 KG.": 1,
-    "FOSFATO DIAMONICO FERTI * 50 KG.": 2,
-    "SULFATO DE AMONIO FERTI * 50 KG.": 3,
-    "ADITIVO MARRON - BOLSAS * 20 KG.": 4,
-    "NITRATO DE AMONIO * 50 KG.": 5,
-    "NITRATO DE AMONIO * 50 KG. - POLIPROPILENO": 6,
-    "CLORURO DE POTASIO *50 KG.": 7,
-    "NITRO S PREMIUM AMARILLO * 50 KG": 8,
-    "SUPER BLUE * 50 KG": 9,
-    "NPK 20-20-20 * 50 KG": 10,
-    "PAPA SIERRA * 50 KG": 11,
-    "ADITIVO AMARILLO * 20KG": 12,
-    "ADITIVO AZUL": 13,
-    "KIESERITA": 14
-};
+// Lista de productos (se llena desde Firebase al iniciar)
+let productosItem = {};
 
 // Variables globales
 let usuarioAutenticado = null;
@@ -66,8 +51,14 @@ function mostrarApp(modo) {
     document.getElementById('loginContainer').style.display = 'none';
     document.getElementById('mainContainer').style.display = 'block';
     
-    actualizarInterfazSegunModo();
-    cargarResumenStock();
+    cargarProductos().then(() => {
+        poblarSelectsProductos();
+        actualizarInterfazSegunModo();
+        cargarResumenStock();
+    }).catch(err => {
+        console.error("Error cargando productos:", err);
+        alert("❌ No se pudo cargar la lista de productos.");
+    });
 }
 
 function actualizarInterfazSegunModo() {
@@ -637,7 +628,7 @@ async function exportarExcel() {
         
         for (let i = 0; i < productosKeys.length; i++) {
             const descripcion = productosKeys[i];
-            const itemProducto = i + 1;
+            const itemProducto = productosItem[descripcion];
             
             const snapshot = await database.ref("inventario/" + itemProducto).once("value");
             let movimientos = snapshot.val() || [];
@@ -665,7 +656,7 @@ async function exportarExcel() {
         // Hojas por producto
         for (let i = 0; i < productosKeys.length; i++) {
             const descripcion = productosKeys[i];
-            const itemProducto = i + 1;
+            const itemProducto = productosItem[descripcion];
             
             const snapshot = await database.ref("inventario/" + itemProducto).once("value");
             let movimientos = snapshot.val() || [];
@@ -719,7 +710,7 @@ async function exportarExcel() {
         
         for (let i = 0; i < productosKeys.length; i++) {
             const descripcion = productosKeys[i];
-            const itemProducto = i + 1;
+            const itemProducto = productosItem[descripcion];
             const snapshot = await database.ref("inventario/" + itemProducto).once("value");
             const movimientos = snapshot.val() || [];
             datosIndice.push([`ITEM ${itemProducto}`, descripcion, movimientos.length]);
@@ -751,6 +742,128 @@ async function exportarExcel() {
             btnExportar.disabled = false;
         }
     }
+}
+
+// ==================== GESTIÓN DINÁMICA DE PRODUCTOS ====================
+
+function cargarProductos() {
+    return database.ref("productos").once("value").then(snapshot => {
+        const data = snapshot.val();
+        
+        if (!data) {
+            // Sembrar productos iniciales usando el ID como key
+            const productosIniciales = {
+                1:  { nombre: "UREA FERTI * 50 KG." },
+                2:  { nombre: "FOSFATO DIAMONICO FERTI * 50 KG." },
+                3:  { nombre: "SULFATO DE AMONIO FERTI * 50 KG." },
+                4:  { nombre: "ADITIVO MARRON - BOLSAS * 20 KG." },
+                5:  { nombre: "NITRATO DE AMONIO * 50 KG." },
+                6:  { nombre: "NITRATO DE AMONIO * 50 KG. - POLIPROPILENO" },
+                7:  { nombre: "CLORURO DE POTASIO *50 KG." },
+                8:  { nombre: "NITRO S PREMIUM AMARILLO * 50 KG" },
+                9:  { nombre: "SUPER BLUE * 50 KG" },
+                10: { nombre: "NPK 20-20-20 * 50 KG" },
+                11: { nombre: "PAPA SIERRA * 50 KG" },
+                12: { nombre: "ADITIVO AMARILLO * 20KG" },
+                13: { nombre: "ADITIVO AZUL" },
+                14: { nombre: "KIESERITA" }
+            };
+            return database.ref("productos").set(productosIniciales).then(() => {
+                // Convertir a { nombre: id }
+                productosItem = {};
+                Object.entries(productosIniciales).forEach(([id, obj]) => {
+                    productosItem[obj.nombre] = Number(id);
+                });
+                return productosItem;
+            });
+        }
+        
+        // Convertir { id: { nombre } } → { nombre: id }
+        productosItem = {};
+        Object.entries(data).forEach(([id, obj]) => {
+            if (obj && obj.nombre) {
+                productosItem[obj.nombre] = Number(id);
+            }
+        });
+        return productosItem;
+    });
+}
+
+function poblarSelectsProductos() {
+    const selects = [
+        document.getElementById("descripcion"),
+        document.getElementById("productoFiltro"),
+        document.getElementById("editDescripcion")
+    ];
+    
+    const listaOrdenada = Object.entries(productosItem)
+        .sort((a, b) => a[1] - b[1]);
+    
+    selects.forEach(sel => {
+        if (!sel) return;
+        while (sel.options.length > 1) sel.remove(1);
+        
+        listaOrdenada.forEach(([nombre, id]) => {
+            const opt = document.createElement("option");
+            opt.textContent = nombre;
+            opt.value = nombre;
+            sel.appendChild(opt);
+        });
+    });
+}
+
+function crearProducto(nombre) {
+    const existe = Object.keys(productosItem).some(
+        p => p.toLowerCase().trim() === nombre.toLowerCase().trim()
+    );
+    if (existe) {
+        alert("⚠️ Ya existe un producto con ese nombre.");
+        return Promise.reject("duplicado");
+    }
+    
+    const ids = Object.values(productosItem);
+    const nuevoId = ids.length > 0 ? Math.max(...ids) + 1 : 1;
+    
+    // Key = ID numérico, valor = { nombre }
+    return database.ref("productos/" + nuevoId).set({ nombre: nombre }).then(() => {
+        productosItem[nombre] = nuevoId;
+        poblarSelectsProductos();
+        return nuevoId;
+    });
+}
+
+function eliminarProducto(nombre) {
+    const id = productosItem[nombre];
+    if (!id) {
+        return Promise.reject("Producto no encontrado");
+    }
+    
+    // Primero borrar movimientos, luego el producto
+    return database.ref("inventario/" + id).remove()
+        .then(() => database.ref("productos/" + id).remove())
+        .then(() => {
+            delete productosItem[nombre];
+            poblarSelectsProductos();
+            return id;
+        });
+}
+
+// Rellena el select del modal de eliminar
+function poblarSelectEliminar() {
+    const sel = document.getElementById("eliminarProductoSelect");
+    if (!sel) return;
+    
+    while (sel.options.length > 1) sel.remove(1);
+    
+    const listaOrdenada = Object.entries(productosItem)
+        .sort((a, b) => a[1] - b[1]);
+    
+    listaOrdenada.forEach(([nombre]) => {
+        const opt = document.createElement("option");
+        opt.textContent = nombre;
+        opt.value = nombre;
+        sel.appendChild(opt);
+    });
 }
 
 // ==================== EVENTOS DEL DOM ====================
@@ -874,7 +987,133 @@ document.addEventListener("DOMContentLoaded", function() {
     
     document.getElementById("btnMostrar").addEventListener("click", mostrarTabla);
     document.getElementById("btnExportarExcel").addEventListener("click", exportarExcel);
+
     
+    // ===== Gestión de productos =====
+    document.getElementById("btnNuevoProducto").addEventListener("click", function() {
+        if (modoActual !== 'admin' || !usuarioAutenticado) {
+            alert("Debe estar en modo Administrador para crear productos");
+            return;
+        }
+        document.getElementById("formNuevoProducto").reset();
+        document.getElementById("modalNuevoProducto").style.display = 'flex';
+    });
+
+    // ===== Eliminar producto =====
+    document.getElementById("btnEliminarProducto").addEventListener("click", function() {
+        if (modoActual !== 'admin' || !usuarioAutenticado) {
+            alert("Debe estar en modo Administrador para eliminar productos");
+            return;
+        }
+        if (Object.keys(productosItem).length === 0) {
+            alert("No hay productos para eliminar");
+            return;
+        }
+        document.getElementById("formEliminarProducto").reset();
+        document.getElementById("advertenciaEliminar").style.display = 'none';
+        poblarSelectEliminar();
+        document.getElementById("modalEliminarProducto").style.display = 'flex';
+    });
+
+    document.getElementById("btnCerrarModalEliminarProducto").addEventListener("click", function() {
+        document.getElementById("modalEliminarProducto").style.display = 'none';
+    });
+
+    document.getElementById("btnCancelarEliminarProducto").addEventListener("click", function() {
+        document.getElementById("modalEliminarProducto").style.display = 'none';
+    });
+
+    document.getElementById("modalEliminarProducto").addEventListener("click", function(e) {
+        if (e.target.id === "modalEliminarProducto") {
+            document.getElementById("modalEliminarProducto").style.display = 'none';
+        }
+    });
+
+    // Mostrar advertencia al seleccionar producto
+    document.getElementById("eliminarProductoSelect").addEventListener("change", function() {
+        const adv = document.getElementById("advertenciaEliminar");
+        adv.style.display = this.value ? 'block' : 'none';
+    });
+
+    document.getElementById("formEliminarProducto").addEventListener("submit", function(e) {
+        e.preventDefault();
+        
+        const nombre = document.getElementById("eliminarProductoSelect").value;
+        if (!nombre) {
+            alert("Selecciona un producto");
+            return;
+        }
+        
+        const id = productosItem[nombre];
+        
+        // Verificar si tiene movimientos
+        database.ref("inventario/" + id).once("value").then(snap => {
+            const movs = snap.val();
+            const cantidad = movs
+                ? (Array.isArray(movs) ? movs.length : Object.keys(movs).length)
+                : 0;
+            
+            const mensaje = cantidad > 0
+                ? `⚠️ El producto "${nombre}" tiene ${cantidad} registro(s) de inventario.\n\n¿Estás seguro de eliminarlo junto con TODOS sus registros?\n\nEsta acción NO se puede deshacer.`
+                : `¿Eliminar el producto "${nombre}"?\n\nNo tiene registros de inventario.`;
+            
+            if (!confirm(mensaje)) return;
+            
+            eliminarProducto(nombre)
+                .then(idBorrado => {
+                    alert(`✅ Producto "${nombre}" (ID ${idBorrado}) eliminado correctamente.`);
+                    document.getElementById("modalEliminarProducto").style.display = 'none';
+                    
+                    // Limpiar tabla visible si era el producto actual
+                    if (itemProductoActual === idBorrado) {
+                        document.getElementById("contenedorTablas").innerHTML = '';
+                        itemProductoActual = null;
+                    }
+                    
+                    cargarResumenStock();
+                })
+                .catch(err => {
+                    console.error("Error eliminando producto:", err);
+                    alert("❌ Error al eliminar: " + (err.message || err));
+                });
+        });
+    });
+
+
+    document.getElementById("btnCerrarModalProducto").addEventListener("click", function() {
+        document.getElementById("modalNuevoProducto").style.display = 'none';
+    });
+
+    document.getElementById("btnCancelarNuevoProducto").addEventListener("click", function() {
+        document.getElementById("modalNuevoProducto").style.display = 'none';
+    });
+
+    document.getElementById("modalNuevoProducto").addEventListener("click", function(e) {
+        if (e.target.id === "modalNuevoProducto") {
+            document.getElementById("modalNuevoProducto").style.display = 'none';
+        }
+    });
+
+    document.getElementById("formNuevoProducto").addEventListener("submit", function(e) {
+        e.preventDefault();
+        const nombre = document.getElementById("nuevoProductoNombre").value.trim();
+        if (!nombre) return;
+
+        crearProducto(nombre)
+            .then(nuevoId => {
+                alert(`✅ Producto "${nombre}" creado con ID ${nuevoId}`);
+                document.getElementById("modalNuevoProducto").style.display = 'none';
+                cargarResumenStock();
+            })
+            .catch(err => {
+                if (err !== "duplicado") {
+                    console.error("Error creando producto:", err);
+                    alert("❌ Error al crear el producto: " + (err.message || err));
+                }
+            });
+    });
+
+
     // Botón Recalcular Stock
     const btnRecalcular = document.getElementById("btnRecalcular");
     if (btnRecalcular) {

@@ -82,25 +82,21 @@
 
     <!-- FORMULARIO DE INVENTARIO (solo visible en modo admin) -->
     <div id="formContainer" style="display: none;">
-        <h2>Agregar Nuevo Registro</h2>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+            <h2 style="margin: 0;">Agregar Nuevo Registro</h2>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button type="button" id="btnNuevoProducto" style="background-color: #ffc107; color: #333; margin: 0;">
+                    ➕ Nuevo Producto
+                </button>
+                <button type="button" id="btnEliminarProducto" style="background-color: #dc3545; color: white; margin: 0;">
+                    🗑️ Eliminar Producto
+                </button>
+            </div>
+        </div>
         <form id="formInventario">
             <label>Descripción:</label>
             <select id="descripcion" required>
                 <option value="">Seleccione</option>
-                <option>UREA FERTI * 50 KG.</option>
-                <option>FOSFATO DIAMONICO FERTI * 50 KG.</option>
-                <option>SULFATO DE AMONIO FERTI * 50 KG.</option>
-                <option>ADITIVO MARRON - BOLSAS * 20 KG.</option>
-                <option>NITRATO DE AMONIO * 50 KG.</option>
-                <option>NITRATO DE AMONIO * 50 KG. - POLIPROPILENO</option>
-                <option>CLORURO DE POTASIO *50 KG.</option>
-                <option>NITRO S PREMIUM AMARILLO * 50 KG</option>
-                <option>SUPER BLUE * 50 KG</option>
-                <option>NPK 20-20-20 * 50 KG</option>
-                <option>PAPA SIERRA * 50 KG</option>
-                <option>ADITIVO AMARILLO * 20KG</option>
-                <option>ADITIVO AZUL</option>
-                <option>KIESERITA</option>
             </select>
 
             <label>Fecha:</label>
@@ -133,20 +129,6 @@
         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
             <select id="productoFiltro" style="flex: 1; min-width: 200px;">
                 <option value="">Seleccione un producto</option>
-                <option>UREA FERTI * 50 KG.</option>
-                <option>FOSFATO DIAMONICO FERTI * 50 KG.</option>
-                <option>SULFATO DE AMONIO FERTI * 50 KG.</option>
-                <option>ADITIVO MARRON - BOLSAS * 20 KG.</option>
-                <option>NITRATO DE AMONIO * 50 KG.</option>
-                <option>NITRATO DE AMONIO * 50 KG. - POLIPROPILENO</option>
-                <option>CLORURO DE POTASIO *50 KG.</option>
-                <option>NITRO S PREMIUM AMARILLO * 50 KG</option>
-                <option>SUPER BLUE * 50 KG</option>
-                <option>NPK 20-20-20 * 50 KG</option>
-                <option>PAPA SIERRA * 50 KG</option>
-                <option>ADITIVO AMARILLO * 20KG</option>
-                <option>ADITIVO AZUL</option>
-                <option>KIESERITA</option>
             </select>
 
             <button type="button" id="btnMostrar">📋 Mostrar Tabla</button>
@@ -189,20 +171,6 @@
             <label>Descripción:</label>
             <select id="editDescripcion" disabled>
                 <option value="">Seleccione</option>
-                <option>UREA FERTI * 50 KG.</option>
-                <option>FOSFATO DIAMONICO FERTI * 50 KG.</option>
-                <option>SULFATO DE AMONIO FERTI * 50 KG.</option>
-                <option>ADITIVO MARRON - BOLSAS * 20 KG.</option>
-                <option>NITRATO DE AMONIO * 50 KG.</option>
-                <option>NITRATO DE AMONIO * 50 KG. - POLIPROPILENO</option>
-                <option>CLORURO DE POTASIO *50 KG.</option>
-                <option>NITRO S PREMIUM AMARILLO * 50 KG</option>
-                <option>SUPER BLUE * 50 KG</option>
-                <option>NPK 20-20-20 * 50 KG</option>
-                <option>PAPA SIERRA * 50 KG</option>
-                <option>ADITIVO AMARILLO * 20KG</option>
-                <option>ADITIVO AZUL</option>
-                <option>KIESERITA</option>
             </select>
 
             <label>Fecha:</label>
@@ -227,6 +195,60 @@
         </form>
     </div>
 </div>
+
+<!-- MODAL PARA CREAR NUEVO PRODUCTO -->
+<div id="modalNuevoProducto" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>➕ Crear Nuevo Producto</h3>
+            <button class="modal-close" id="btnCerrarModalProducto">&times;</button>
+        </div>
+        <form id="formNuevoProducto">
+            <label>Nombre del producto:</label>
+            <input type="text" id="nuevoProductoNombre"
+                   placeholder="Ej: SULFATO DE MAGNESIO * 50 KG."
+                   required maxlength="80">
+
+            <p style="font-size: 13px; color: #666; margin-top: 8px;">
+                💡 El producto aparecerá en todos los desplegables automáticamente.
+                El ID se asignará solo.
+            </p>
+
+            <div class="modal-buttons">
+                <button type="button" id="btnCancelarNuevoProducto" class="btn-cancelar">Cancelar</button>
+                <button type="submit" class="btn-guardar">Crear Producto</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- MODAL PARA ELIMINAR PRODUCTO -->
+<div id="modalEliminarProducto" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>🗑️ Eliminar Producto</h3>
+            <button class="modal-close" id="btnCerrarModalEliminarProducto">&times;</button>
+        </div>
+        <form id="formEliminarProducto">
+            <label>Selecciona el producto a eliminar:</label>
+            <select id="eliminarProductoSelect" required>
+                <option value="">Seleccione</option>
+            </select>
+
+            <div id="advertenciaEliminar" style="display: none; background: #f8d7da; color: #721c24; padding: 12px; border-radius: 6px; margin-top: 15px; border: 1px solid #f5c6cb; font-size: 0.9rem;">
+                ⚠️ <strong>Atención:</strong> Esta acción eliminará el producto <strong>y todos sus registros de inventario</strong>. No se puede deshacer.
+            </div>
+
+            <div class="modal-buttons">
+                <button type="button" id="btnCancelarEliminarProducto" class="btn-cancelar">Cancelar</button>
+                <button type="submit" class="btn-eliminar" style="background-color: #dc3545 !important;">Eliminar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script src="codigo-firebase.js"></script>
+
 
 <script src="codigo-firebase.js"></script>
 
